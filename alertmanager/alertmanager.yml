@@ -1,0 +1,87 @@
+global:
+  # Configure MailHog as SMTP server
+  smtp_smarthost: 'mailhog:1025'
+  smtp_from: 'alertmanager@monitoring.local'
+  smtp_require_tls: false
+
+# Main routing configuration
+route:
+  # Group alerts by these labels
+  group_by: ['alertname', 'instance']
+  group_wait: 10s        # Wait 10s before sending first notification
+  group_interval: 10s    # Wait 10s before sending additional notifications
+  repeat_interval: 4h    # Repeat interval for same alert
+  receiver: 'default'    # Default receiver
+  
+  # Sub-routes for different severities
+  routes:
+    # Critical alerts go to webhook (simulating Slack)
+    - match:
+        severity: critical
+      receiver: 'webhook-critical'
+      group_wait: 5s       # Faster for critical alerts
+      repeat_interval: 1h  # More frequent repeats
+    
+    # Warning alerts go to email
+    - match:
+        severity: warning
+      receiver: 'email-warnings'
+      group_wait: 30s      # Group warnings for 30s
+      repeat_interval: 6h  # Less frequent for warnings
+
+# Inhibition rules - suppress alerts when related alerts fire
+inhibit_rules:
+  # If NodeDown is firing, suppress HighCPUUsage for same instance
+  - source_match:
+      alertname: NodeDown
+    target_match:
+      alertname: HighCPUUsage
+    equal: ['instance']    # Must be same instance
+  
+  # If NodeDown is firing, suppress HighMemoryUsage for same instance
+  - source_match:
+      alertname: NodeDown
+    target_match:
+      alertname: HighMemoryUsage
+    equal: ['instance']
+
+# Notification receivers
+receivers:
+  # Default receiver
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://webhook-logger:8081/default'
+        send_resolved: true
+
+  # Critical alerts → Webhook (simulating Slack)
+  - name: 'webhook-critical'
+    webhook_configs:
+      - url: 'http://webhook-logger:8081/slack'
+        send_resolved: true
+        title: '🚨 CRITICAL ALERT'
+        text: |
+          Critical Alert Fired:
+          {{ range .Alerts }}
+          Alert: {{ .Labels.alertname }}
+          Instance: {{ .Labels.instance }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+
+  # Warning alerts → Email (MailHog)
+  - name: 'email-warnings'
+    email_configs:
+      - to: 'ops-team@company.local'
+        from: 'alertmanager@monitoring.local'
+        subject: '⚠️ Warning: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Warning Alert</h2>
+          <table border="1">
+            <tr><th>Alert</th><th>Instance</th><th>Description</th></tr>
+            {{ range .Alerts }}
+            <tr>
+              <td>{{ .Labels.alertname }}</td>
+              <td>{{ .Labels.instance }}</td>
+              <td>{{ .Annotations.description }}</td>
+            </tr>
+            {{ end }}
+          </table>

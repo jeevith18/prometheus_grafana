@@ -1,0 +1,64 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Rule files for alerting and recording rules
+rule_files:
+  - "recording_rules.yml"
+  - "alert_rules.yml"
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Job 1: Node Exporter with file-based service discovery
+  - job_name: 'node-exporter'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets.json'
+        refresh_interval: 30s
+    relabel_configs:
+      # Only scrape targets with job label 'node-exporter'
+      - source_labels: [job]
+        regex: 'node-exporter'
+        action: keep
+
+  # Job 2: cAdvisor with file-based service discovery
+  - job_name: 'cadvisor'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets.json'
+        refresh_interval: 30s
+    relabel_configs:
+      # Only scrape targets with job label 'cadvisor'
+      - source_labels: [job]
+        regex: 'cadvisor'
+        action: keep
+
+  # Job 3: Prometheus self-monitoring with file-based service discovery
+  - job_name: 'prometheus'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets.json'
+        refresh_interval: 30s
+    relabel_configs:
+      # Only scrape targets with job label 'prometheus'
+      - source_labels: [job]
+        regex: 'prometheus'
+        action: keep
+
+  # Job 4: Alertmanager with file-based service discovery
+  - job_name: 'alertmanager'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets.json'
+        refresh_interval: 30s
+    relabel_configs:
+      # Only scrape targets with job label 'alertmanager'
+      - source_labels: [job]
+        regex: 'alertmanager'
+        action: keep
