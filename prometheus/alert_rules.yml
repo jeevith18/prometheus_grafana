@@ -1,0 +1,144 @@
+groups:
+  # Node-level alerting rules
+  - name: node_alerts
+    rules:
+      # 1. High CPU Usage Alert (Using Recording Rule)
+      - alert: HighCPUUsage
+        expr: instance:node_cpu_utilisation:rate5m * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: node-exporter
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% on {{ $labels.instance }} for more than 2 minutes. Current value: {{ $value }}%"
+
+      # 2. Node Down Alert
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: node-exporter
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Node {{ $labels.instance }} has been down for more than 5 minutes. Check if the node-exporter service is running."
+
+      # High Memory Usage Alert (Using Recording Rule)
+      - alert: HighMemoryUsage
+        expr: instance:node_memory_utilisation:ratio * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          service: node-exporter
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% on {{ $labels.instance }} for more than 3 minutes. Current value: {{ $value }}%"
+
+      # Disk Space Alert
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: node-exporter
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is below 10% on {{ $labels.instance }} ({{ $labels.mountpoint }}). Current available: {{ $value }}%"
+
+  # Container-level alerting rules  
+  - name: container_alerts
+    rules:
+      # 3. High Container Memory Usage Alert (Using Recording Rule)
+      - alert: HighContainerMemoryUsage
+        expr: instance:container_memory_utilisation:ratio * 100 > 90
+        for: 3m
+        labels:
+          severity: warning
+          service: cadvisor
+        annotations:
+          summary: "High memory usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using more than 90% of its memory limit for more than 3 minutes. Current value: {{ $value }}%"
+
+      # Container Down Alert
+      - alert: ContainerDown
+        expr: up{job="cadvisor"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: cadvisor
+        annotations:
+          summary: "cAdvisor is down on {{ $labels.instance }}"
+          description: "cAdvisor has been down for more than 5 minutes on {{ $labels.instance }}. Container monitoring is not available."
+
+      # High Container CPU Usage
+      - alert: HighContainerCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: cadvisor
+        annotations:
+          summary: "High CPU usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using more than 80% CPU for more than 5 minutes. Current value: {{ $value }}%"
+
+  # Prometheus and monitoring stack alerts
+  - name: monitoring_alerts
+    rules:
+      # Prometheus Down Alert
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: prometheus
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus has been down for more than 5 minutes. Monitoring and alerting are not available."
+
+      # Alertmanager Down Alert
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: alertmanager
+        annotations:
+          summary: "Alertmanager is down"
+          description: "Alertmanager has been down for more than 5 minutes. Alert notifications will not be sent."
+
+      # Too Many Failed Scrapes
+      - alert: PrometheusTargetScrapeFailing
+        expr: up == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: prometheus
+        annotations:
+          summary: "Prometheus target {{ $labels.instance }} scrape failing"
+          description: "Prometheus has been unable to scrape {{ $labels.job }} on {{ $labels.instance }} for more than 10 minutes."
+
+  # Network and performance alerts
+  - name: performance_alerts
+    rules:
+      # High Network Traffic
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*"}[5m]) > 100000000  # 100MB/s
+        for: 5m
+        labels:
+          severity: warning
+          service: node-exporter
+        annotations:
+          summary: "High network traffic on {{ $labels.instance }}"
+          description: "Network interface {{ $labels.device }} on {{ $labels.instance }} is receiving more than 100MB/s for more than 5 minutes. Current rate: {{ $value | humanize }}B/s"
+
+      # High Disk I/O
+      - alert: HighDiskIO
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: node-exporter
+        annotations:
+          summary: "High disk I/O on {{ $labels.instance }}"
+          description: "Disk I/O utilization is above 80% on {{ $labels.instance }} ({{ $labels.device }}) for more than 5 minutes. Current value: {{ $value | humanizePercentage }}"

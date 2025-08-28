@@ -1,0 +1,135 @@
+groups:
+  # Recording rules for Node Exporter metrics
+  - name: node_exporter_rules
+    interval: 30s
+    rules:
+      # CPU utilization per node (5-minute rate)
+      - record: instance:node_cpu_utilisation:rate5m
+        expr: |
+          (
+            (1 - rate(node_cpu_seconds_total{mode="idle"}[5m]))
+            * on(instance) group_left(nodename)
+            (node_uname_info)
+          )
+        labels:
+          job: node-exporter
+
+      # Memory utilization percentage per node
+      - record: instance:node_memory_utilisation:ratio
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+            / node_memory_MemTotal_bytes
+            * on(instance) group_left(nodename)
+            (node_uname_info)
+          )
+        labels:
+          job: node-exporter
+
+      # Disk utilization percentage per node
+      - record: instance:node_disk_utilisation:ratio
+        expr: |
+          (
+            (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_avail_bytes{fstype!="tmpfs"})
+            / node_filesystem_size_bytes{fstype!="tmpfs"}
+            * on(instance) group_left(nodename)
+            (node_uname_info)
+          )
+        labels:
+          job: node-exporter
+
+      # Network receive bytes rate per node (5-minute rate)
+      - record: instance:node_network_receive_bytes:rate5m
+        expr: |
+          (
+            rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|virbr.*|br-.*"}[5m])
+            * on(instance) group_left(nodename)
+            (node_uname_info)
+          )
+        labels:
+          job: node-exporter
+
+      # Network transmit bytes rate per node (5-minute rate)
+      - record: instance:node_network_transmit_bytes:rate5m
+        expr: |
+          (
+            rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|virbr.*|br-.*"}[5m])
+            * on(instance) group_left(nodename)
+            (node_uname_info)
+          )
+        labels:
+          job: node-exporter
+
+  # Recording rules for cAdvisor metrics
+  - name: cadvisor_rules
+    interval: 30s
+    rules:
+      # Container memory usage in bytes
+      - record: instance:container_memory_usage_bytes
+        expr: |
+          (
+            container_memory_usage_bytes{name!=""}
+          )
+        labels:
+          job: cadvisor
+
+      # Container memory utilization percentage
+      - record: instance:container_memory_utilisation:ratio
+        expr: |
+          (
+            container_memory_usage_bytes{name!=""}
+            / container_spec_memory_limit_bytes{name!=""} > 0
+          )
+        labels:
+          job: cadvisor
+
+      # Container CPU usage rate (5-minute rate)
+      - record: instance:container_cpu_usage:rate5m
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{name!=""}[5m])
+          )
+        labels:
+          job: cadvisor
+
+      # Container network receive bytes rate (5-minute rate)
+      - record: instance:container_network_receive_bytes:rate5m
+        expr: |
+          (
+            rate(container_network_receive_bytes_total{name!=""}[5m])
+          )
+        labels:
+          job: cadvisor
+
+      # Container network transmit bytes rate (5-minute rate)
+      - record: instance:container_network_transmit_bytes:rate5m
+        expr: |
+          (
+            rate(container_network_transmit_bytes_total{name!=""}[5m])
+          )
+        labels:
+          job: cadvisor
+
+  # Recording rules for aggregated metrics
+  - name: aggregation_rules
+    interval: 60s
+    rules:
+      # Total CPU utilization across all nodes
+      - record: cluster:node_cpu_utilisation:mean5m
+        expr: |
+          avg(instance:node_cpu_utilisation:rate5m)
+
+      # Total memory utilization across all nodes
+      - record: cluster:node_memory_utilisation:mean
+        expr: |
+          avg(instance:node_memory_utilisation:ratio)
+
+      # Total container memory usage across all containers
+      - record: cluster:container_memory_usage_bytes:sum
+        expr: |
+          sum(instance:container_memory_usage_bytes)
+
+      # Average container CPU usage across all containers
+      - record: cluster:container_cpu_usage:mean5m
+        expr: |
+          avg(instance:container_cpu_usage:rate5m)
